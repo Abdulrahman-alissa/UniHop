@@ -54,7 +54,7 @@ npm run build      # production build in dist/
 npm run preview    # serve the production build locally
 ```
 
-Requires Node 18 or newer. Demo login: `test@lau.edu` / `carpool123`.
+Requires Node 18 or newer. Demo login: `test.female@lau.edu` / `carpool123`.
 
 ## Deployment
 
