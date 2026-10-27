@@ -7,7 +7,7 @@ Student ride-share for LAU Beirut and LAU Byblos.
 **Course:** CSC443, Fall 2026, Project Part 1
 
 **Live app:** _paste your deployed link here_
-**Repository:** _paste your GitHub link here_
+**Repository:** https://github.com/Abdulrahman-alissa/UniHop
 
 ## Assigned topic and data entities
 
