@@ -54,7 +54,7 @@ npm run build      # production build in dist/
 npm run preview    # serve the production build locally
 ```
 
-Requires Node 18 or newer. Demo login: `sara.khoury@lau.edu` / `carpool123`.
+Requires Node 18 or newer. Demo login: `test@lau.edu` / `carpool123`.
 
 ## Deployment
 
@@ -100,4 +100,4 @@ The repo includes `.github/workflows/deploy.yml`. Push to `main`, then in GitHub
 
 ## Screenshots
 
-_Add your screenshots or a GIF here from `docs/screenshots/`: home, ride list with filters, ride details, post ride form, dashboard, sign in, dark mode, mobile view._
+......
