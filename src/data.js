@@ -18,7 +18,7 @@ export const CAMPUS_INFO = {
 export const AREAS = ["Aley", "Baabda", "Batroun", "Beirut", "Byblos", "Hamra", "Jounieh", "Kaslik", "Saida", "Tripoli"];
 export const RIDE_TAGS = ["Quiet ride", "Music OK", "Air-conditioned", "Luggage space", "Study-friendly", "Non-smoking"];
 export const GENDERS = [["female", "Girl"], ["male", "Boy"]];
-export const DEMO = { email: "sara.khoury@lau.edu", password: "carpool123" };
+export const DEMO = { email: "test.female@lau.edu", password: "carpool123" };
 
 const iso = (date) => date.toISOString();
 const soon = (min) => iso(new Date(Date.now() + min * 60000));
@@ -31,10 +31,10 @@ const at = (days, hhmm) => {
 };
 
 export const seedUsers = [
-  { id: "u1", name: "Sara Khoury", email: "sara.khoury@lau.edu", password: "carpool123", campus: "LAU Beirut", gender: "female", rating: 4.9, verified: true, phone: "+961 70 123 456", joinedAt: "2024-09-02", bio: "Daily commuter from Jounieh. I keep the car quiet in the morning and the playlist good in the afternoon.", car: { make: "Kia", model: "Picanto", color: "Silver", plate: "B 214553", languages: ["Arabic", "English", "French"], permitVerified: true, trips: 64 } },
-  { id: "u2", name: "Karim Haddad", email: "karim.haddad@lau.edu", password: "carpool123", campus: "LAU Byblos", gender: "male", rating: 4.7, verified: true, phone: "+961 71 234 567", joinedAt: "2023-09-11", bio: "Final-year student. Always leave on time, always have water in the car.", car: { make: "Toyota", model: "Yaris", color: "White", plate: "M 489120", languages: ["Arabic", "English"], permitVerified: true, trips: 91 } },
-  { id: "u3", name: "Lina Nasr", email: "lina.nasr@lau.edu", password: "carpool123", campus: "LAU Beirut", gender: "female", rating: 4.8, verified: true, phone: "+961 76 345 678", joinedAt: "2025-01-20", bio: "Studio hours are long, so I drive early and share the fuel.", car: { make: "Honda", model: "Civic", color: "Black", plate: "G 330871", languages: ["Arabic", "English", "French"], permitVerified: true, trips: 37 } },
-  { id: "u4", name: "Omar Daher", email: "omar.daher@lau.edu", password: "carpool123", campus: "LAU Byblos", gender: "male", rating: 0, verified: true, phone: "+961 03 456 789", joinedAt: "2026-09-05", bio: "", car: null },
+  { id: "u1", name: "Sara Khoury", email: "test.female@lau.edu", password: "carpool123", campus: "LAU Beirut", gender: "female", rating: 4.9, verified: true, phone: "+961 70 123 456", joinedAt: "2024-09-02", bio: "Daily commuter from Jounieh. I keep the car quiet in the morning and the playlist good in the afternoon.", car: { make: "Kia", model: "Picanto", color: "Silver", plate: "B 214553", languages: ["Arabic", "English", "French"], permitVerified: true, trips: 64 } },
+  { id: "u2", name: "Karim Haddad", email: "test.male@lau.edu", password: "carpool123", campus: "LAU Byblos", gender: "male", rating: 4.7, verified: true, phone: "+961 71 234 567", joinedAt: "2023-09-11", bio: "Final-year student. Always leave on time, always have water in the car.", car: { make: "Toyota", model: "Yaris", color: "White", plate: "M 489120", languages: ["Arabic", "English"], permitVerified: true, trips: 91 } },
+  { id: "u3", name: "Lina Nasr", email: "test.female2@lau.edu", password: "carpool123", campus: "LAU Beirut", gender: "female", rating: 4.8, verified: true, phone: "+961 76 345 678", joinedAt: "2025-01-20", bio: "Studio hours are long, so I drive early and share the fuel.", car: { make: "Honda", model: "Civic", color: "Black", plate: "G 330871", languages: ["Arabic", "English", "French"], permitVerified: true, trips: 37 } },
+  { id: "u4", name: "Omar Daher", email: "test.male2@lau.edu", password: "carpool123", campus: "LAU Byblos", gender: "male", rating: 0, verified: true, phone: "+961 03 456 789", joinedAt: "2026-09-05", bio: "", car: null },
 ];
 
 const base = { status: "open", postedAt: soon(-300), direction: "toCampus", girlsOnly: false };
