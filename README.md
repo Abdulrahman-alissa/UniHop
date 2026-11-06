@@ -6,7 +6,7 @@ Student ride-share for LAU Beirut and LAU Byblos.
 **Members:** Abdulrahman Al Issa, Hassan Tohme, Mohammad Zaiter
 **Course:** CSC443, Fall 2026, Project Part 1
 
-**Live app:** _paste your deployed link here_
+**Live app:** https://unihop-black.vercel.app
 **Repository:** https://github.com/Abdulrahman-alissa/UniHop
 
 ## Assigned topic and data entities
