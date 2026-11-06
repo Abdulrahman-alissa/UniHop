@@ -100,4 +100,4 @@ The repo includes `.github/workflows/deploy.yml`. Push to `main`, then in GitHub
 
 ## Screenshots
 
-......
+docs/screenshots
