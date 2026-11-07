@@ -5,7 +5,6 @@ import { Avatar, Badge, EmptyState, Stars } from "../components/ui";
 import { ButtonLink } from "../components/Button";
 import RideCard from "../components/RideCard";
 
-// Driver profile with their open rides
 export default function Driver() {
   const { id } = useParams();
   const { users, ridesByDriver, canSee } = useStore();
