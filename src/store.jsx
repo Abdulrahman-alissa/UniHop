@@ -1,128 +1,149 @@
-import { createContext, useCallback, useContext, useEffect, useMemo, useState } from "react";
-import { seedUsers, seedRides, seedBookings } from "./data";
+import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState } from "react";
+import { api, tokenStore } from "./lib/api";
 
 const Ctx = createContext(null);
 export const useStore = () => useContext(Ctx);
 
-let counter = 100;
-const uid = (p) => `${p}${counter++}`;
+let counter = 0;
 const ok = (extra = {}) => ({ ok: true, ...extra });
-const fail = (error) => ({ ok: false, error });
+const fail = (err) => ({ ok: false, error: err?.message || "Something went wrong. Try again.", code: err?.code });
 const live = (b) => b.status === "pending" || b.status === "confirmed";
+const EMPTY_BOOKINGS = { asPassenger: [], asDriver: [] };
 
-// Everything lives in React state, so data is lost on refresh
+// All shared data now lives in the database. This store keeps a cached copy for the UI,
+// calls the REST API for every change and then re-fetches so the screen always matches the server.
 export function StoreProvider({ children }) {
-  const [users, setUsers] = useState(seedUsers);
-  const [rides, setRides] = useState(seedRides);
-  const [bookings, setBookings] = useState(seedBookings);
-  const [savedRideIds, setSaved] = useState(["r5"]);
-  const [userId, setUserId] = useState(null);
+  const [rides, setRides] = useState([]);
+  const [myBookings, setMyBookings] = useState(EMPTY_BOOKINGS);
+  const [savedRideIds, setSaved] = useState([]);
+  const [currentUser, setCurrentUser] = useState(null);
+  // "loading" (first fetch) | "ready" | "error" (API unreachable)
+  const [boot, setBoot] = useState({ state: "loading", error: "" });
   const [toasts, setToasts] = useState([]);
   const [theme, setTheme] = useState(() => (window.matchMedia?.("(prefers-color-scheme: dark)").matches ? "dark" : "light"));
+  const userRef = useRef(null);
+  userRef.current = currentUser;
 
   useEffect(() => { document.documentElement.classList.toggle("dark", theme === "dark"); }, [theme]);
 
   const toast = useCallback((type, title, description) => {
-    const id = uid("t");
+    const id = `t${counter++}`;
     setToasts((t) => [...t, { id, type, title, description }]);
     setTimeout(() => setToasts((t) => t.filter((x) => x.id !== id)), 4200);
   }, []);
 
-  const currentUser = users.find((u) => u.id === userId) || null;
+  /** Re-download rides (and, when signed in, my bookings and saved rides). */
+  const refresh = useCallback(async (signedIn = Boolean(userRef.current)) => {
+    const [r, b, s] = await Promise.all([
+      api.get("/rides?limit=500"),
+      signedIn ? api.get("/bookings/mine") : EMPTY_BOOKINGS,
+      signedIn ? api.get("/saved") : [],
+    ]);
+    setRides(r); setMyBookings(b); setSaved(s);
+  }, []);
 
-  // girls-only rides can only be seen by girls (and the driver)
-  const canSee = (r) => !r.girlsOnly || currentUser?.gender === "female";
+  const loadAll = useCallback(async () => {
+    setBoot({ state: "loading", error: "" });
+    try {
+      let user = null;
+      if (tokenStore.get()) {
+        try { user = await api.get("/auth/me"); }
+        catch (e) { if (e.status === 401) tokenStore.set(null); else throw e; } // expired token: continue signed out
+      }
+      userRef.current = user;
+      setCurrentUser(user);
+      await refresh(Boolean(user));
+      setBoot({ state: "ready", error: "" });
+    } catch (e) {
+      setBoot({ state: "error", error: e.message });
+    }
+  }, [refresh]);
 
-  // rides with driver info and seat counts added
-  const ridesWithDrivers = useMemo(
-    () =>
-      rides.map((r) => {
-        const seatsBooked = bookings.filter((b) => b.rideId === r.id && live(b)).reduce((s, b) => s + b.seats, 0);
-        const seatsLeft = Math.max(0, r.seatsTotal - seatsBooked);
-        return { ...r, driver: users.find((u) => u.id === r.driverId), seatsBooked, seatsLeft, isFull: seatsLeft === 0 };
-      }),
-    [rides, users, bookings]
-  );
-  const getRideView = (id) => ridesWithDrivers.find((r) => r.id === id);
+  useEffect(() => { loadAll(); }, [loadAll]);
+
+  // Wrap a mutation: run it, refresh the cached data, and turn errors into { ok:false, error }.
+  const mutate = async (fn) => {
+    try {
+      const data = await fn();
+      await refresh();
+      return ok(data ? { data } : {});
+    } catch (e) {
+      if (e.status === 401 && userRef.current) { signOut(); return fail({ message: "Your session expired. Please sign in again." }); }
+      return fail(e);
+    }
+  };
+
+  const ridesWithDrivers = rides;
+  const getRideView = (id) => rides.find((r) => r.id === id);
   const upcoming = useMemo(
-    () => ridesWithDrivers
+    () => rides
       .filter((r) => r.status === "open" && new Date(r.departAt).getTime() > Date.now() - 3600000)
-      .filter((r) => !r.girlsOnly || currentUser?.gender === "female")
       .sort((a, b) => new Date(a.departAt) - new Date(b.departAt)),
-    [ridesWithDrivers, currentUser]
+    [rides]
   );
-  const decorate = (b) => ({ ...b, ride: getRideView(b.rideId), passenger: users.find((u) => u.id === b.passengerId) });
-  const ridesByDriver = (id) => ridesWithDrivers.filter((r) => r.driverId === id);
-  const bookingsByPassenger = (id) => bookings.filter((b) => b.passengerId === id).map(decorate);
-  const bookingsForDriver = (id) => bookings.filter((b) => rides.find((r) => r.id === b.rideId)?.driverId === id).map(decorate);
-  const canManageRide = (id) => rides.find((r) => r.id === id)?.driverId === userId;
+  // The API already hides girls-only rides from non-girl accounts; this keeps the UI rule explicit.
+  const canSee = (r) => !r.girlsOnly || currentUser?.gender === "female";
+  const ridesByDriver = (id) => rides.filter((r) => r.driverId === id);
+  const withFreshRide = (b) => ({ ...b, ride: getRideView(b.rideId) || b.ride });
+  const bookingsByPassenger = () => myBookings.asPassenger.map((b) => ({ ...withFreshRide(b), passenger: currentUser }));
+  const bookingsForDriver = () => myBookings.asDriver.map(withFreshRide);
+  const canManageRide = (id) => rides.find((r) => r.id === id)?.driverId === currentUser?.id;
+  const bookings = myBookings.asPassenger; // my own bookings (used to detect "already booked")
 
-  // Auth
-  const login = (email, password) => {
-    const u = users.find((x) => x.email === email.trim().toLowerCase() && x.password === password);
-    if (!u) return fail("Email or password is incorrect.");
-    setUserId(u.id);
-    return ok();
+  // Auth ------------------------------------------------------------------
+  const startSession = async ({ token, user }) => {
+    tokenStore.set(token);
+    userRef.current = user;
+    setCurrentUser(user);
+    try { await refresh(true); } catch { /* the UI will retry on the next action */ }
   };
-  const register = (data) => {
-    const email = data.email.trim().toLowerCase();
-    if (users.some((u) => u.email === email)) return fail("An account with this email already exists.");
-    const u = { id: uid("u"), ...data, name: data.name.trim(), email, rating: 0, verified: true, phone: "", joinedAt: new Date().toISOString(), bio: "", car: null };
-    setUsers((us) => [...us, u]);
-    setUserId(u.id);
-    return ok();
+  const signOut = () => {
+    tokenStore.set(null);
+    userRef.current = null;
+    setCurrentUser(null);
+    setMyBookings(EMPTY_BOOKINGS);
+    setSaved([]);
+    refresh(false).catch(() => {}); // girls-only rides disappear again
   };
-  const logout = () => setUserId(null);
-
-  // Rides: only the driver can edit or cancel
-  const createRide = (draft) => {
-    if (!currentUser) return fail("Sign in to post a ride.");
-    const id = uid("r");
-    // only girl drivers can make a girls-only ride
-    const girlsOnly = currentUser.gender === "female" && Boolean(draft.girlsOnly);
-    setRides((rs) => [...rs, { ...draft, girlsOnly, id, driverId: currentUser.id, status: "open", postedAt: new Date().toISOString() }]);
-    return ok({ rideId: id });
+  const login = async (email, password) => {
+    try { await startSession(await api.post("/auth/login", { email, password })); return ok(); }
+    catch (e) { return fail(e); }
   };
-  const updateRide = (id, draft) => {
-    if (!canManageRide(id)) return fail("Only the driver can edit this ride.");
-    setRides((rs) => rs.map((r) => (r.id === id ? { ...r, ...draft } : r)));
-    return ok();
-  };
-  const setRideStatus = (id, status) => {
-    if (!canManageRide(id)) return fail("Only the driver can change this ride.");
-    setRides((rs) => rs.map((r) => (r.id === id ? { ...r, status } : r)));
-    if (status === "cancelled") setBookings((bs) => bs.map((b) => (b.rideId === id && live(b) ? { ...b, status: "cancelled" } : b)));
-    return ok();
+  const register = async (data) => {
+    try { await startSession(await api.post("/auth/register", data)); return ok(); }
+    catch (e) { return fail(e); }
   };
 
-  // Bookings
-  const bookRide = (rideId, seats, note) => {
-    const r = getRideView(rideId);
-    if (!currentUser) return fail("Sign in to book a seat.");
-    if (!r || r.status !== "open") return fail("This ride is no longer open.");
-    if (r.girlsOnly && currentUser.gender !== "female") return fail("This ride is for girls only.");
-    if (r.driverId === currentUser.id) return fail("You can't book your own ride.");
-    if (seats > r.seatsLeft) return fail(`Only ${r.seatsLeft} seat(s) left.`);
-    if (bookings.some((b) => b.rideId === rideId && b.passengerId === currentUser.id && live(b))) return fail("You already booked this ride.");
-    setBookings((bs) => [...bs, { id: uid("b"), rideId, passengerId: currentUser.id, seats, status: "pending", note: note.trim() }]);
-    return ok();
+  // Rides: only the driver can edit or cancel (enforced by the API too) --------
+  const createRide = async (draft) => {
+    const r = await mutate(() => api.post("/rides", draft));
+    return r.ok ? ok({ rideId: r.data.id }) : r;
   };
-  const cancelBooking = (id) => {
-    if (bookings.find((b) => b.id === id)?.passengerId !== currentUser?.id) return fail("That isn't your booking.");
-    setBookings((bs) => bs.map((b) => (b.id === id ? { ...b, status: "cancelled" } : b)));
-    return ok();
+  const updateRide = (id, draft) => mutate(() => api.put(`/rides/${id}`, draft));
+  const setRideStatus = (id, status) => mutate(() => api.patch(`/rides/${id}/status`, { status }));
+
+  // Bookings --------------------------------------------------------------
+  const bookRide = (rideId, seats, note) => mutate(() => api.post(`/rides/${rideId}/bookings`, { seats, note: note.trim() }));
+  const cancelBooking = (id) => mutate(() => api.patch(`/bookings/${id}/status`, { status: "cancelled" }));
+  const respondToBooking = (id, status) => mutate(() => api.patch(`/bookings/${id}/status`, { status }));
+
+  // Saved rides: optimistic update, rolled back if the server says no
+  const toggleSaved = async (id) => {
+    if (!currentUser) { toast("info", "Sign in to save rides", "Saved rides are kept on your account."); return; }
+    const was = savedRideIds.includes(id);
+    setSaved((s) => (was ? s.filter((x) => x !== id) : [...s, id]));
+    try {
+      await (was ? api.delete(`/saved/${id}`) : api.put(`/saved/${id}`));
+      toast("info", was ? "Removed from saved rides" : "Saved for later");
+    } catch (e) {
+      setSaved((s) => (was ? [...s, id] : s.filter((x) => x !== id)));
+      toast("error", "Couldn't update saved rides", e.message);
+    }
   };
-  const respondToBooking = (id, status) => {
-    const b = bookings.find((x) => x.id === id);
-    if (!b || !canManageRide(b.rideId)) return fail("Only the driver can answer requests.");
-    setBookings((bs) => bs.map((x) => (x.id === id ? { ...x, status } : x)));
-    return ok();
-  };
-  const toggleSaved = (id) => setSaved((s) => (s.includes(id) ? s.filter((x) => x !== id) : [...s, id]));
   const toggleTheme = () => setTheme((t) => (t === "dark" ? "light" : "dark"));
 
   return (
-    <Ctx.Provider value={{ users, bookings, currentUser, theme, toggleTheme, toasts, toast, ridesWithDrivers, upcoming, getRideView, ridesByDriver, bookingsByPassenger, bookingsForDriver, canManageRide, canSee, savedRideIds, toggleSaved, login, register, logout, createRide, updateRide, setRideStatus, bookRide, cancelBooking, respondToBooking }}>
+    <Ctx.Provider value={{ boot, reload: loadAll, bookings, currentUser, theme, toggleTheme, toasts, toast, ridesWithDrivers, upcoming, getRideView, ridesByDriver, bookingsByPassenger, bookingsForDriver, canManageRide, canSee, savedRideIds, toggleSaved, login, register, logout: signOut, createRide, updateRide, setRideStatus, bookRide, cancelBooking, respondToBooking }}>
       {children}
     </Ctx.Provider>
   );
