@@ -1,4 +1,5 @@
 import { Link } from "react-router-dom";
+import { Loader2 } from "lucide-react";
 import { cn } from "../lib/cn";
 
 const base = "inline-flex items-center justify-center gap-2 rounded-xl font-bold transition-all active:scale-[.98] disabled:pointer-events-none disabled:opacity-50 cursor-pointer";
@@ -15,8 +16,9 @@ const sizes = { sm: "min-h-10 px-3 text-sm", md: "min-h-11 px-5", lg: "min-h-13 
 const cls = ({ variant = "primary", size = "md", fullWidth, className }) =>
   cn(base, variants[variant], sizes[size], fullWidth && "w-full", className);
 
-export function Button({ variant, size, fullWidth, className, icon, children, type = "button", ...rest }) {
-  return <button type={type} className={cls({ variant, size, fullWidth, className })} {...rest}>{icon}{children}</button>;
+// `loading` shows a spinner and blocks clicks while an API call is in flight.
+export function Button({ variant, size, fullWidth, className, icon, children, type = "button", loading, disabled, ...rest }) {
+  return <button type={type} className={cls({ variant, size, fullWidth, className })} disabled={disabled || loading} aria-busy={loading || undefined} {...rest}>{loading ? <Loader2 className="h-4 w-4 animate-spin" aria-hidden /> : icon}{children}</button>;
 }
 export function ButtonLink({ variant, size, fullWidth, className, icon, children, ...rest }) {
   return <Link className={cls({ variant, size, fullWidth, className })} {...rest}>{icon}{children}</Link>;

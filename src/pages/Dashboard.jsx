@@ -19,8 +19,8 @@ export default function Dashboard() {
   if (!currentUser) return <Navigate to="/auth?next=%2Fdashboard" replace />;
 
   const posted = ridesByDriver(currentUser.id);
-  const booked = bookingsByPassenger(currentUser.id).filter((b) => b.status !== "cancelled");
-  const incoming = bookingsForDriver(currentUser.id).filter((b) => b.status !== "cancelled");
+  const booked = bookingsByPassenger().filter((b) => b.status !== "cancelled");
+  const incoming = bookingsForDriver().filter((b) => b.status !== "cancelled");
   const saved = ridesWithDrivers.filter((r) => savedRideIds.includes(r.id));
   const pending = incoming.filter((b) => b.status === "pending").length;
   const counts = { posted: posted.length, booked: booked.length, requests: incoming.length, saved: saved.length };
@@ -132,8 +132,8 @@ export default function Dashboard() {
                   </div>
                   <BookingStatusBadge status={b.status} />
                   <div className="flex gap-2">
-                    <Button size="sm" icon={<CheckCircle2 className="h-4 w-4" aria-hidden />} disabled={b.status === "confirmed"} onClick={() => { const r = respondToBooking(b.id, "confirmed"); toast(r.ok ? "success" : "error", r.ok ? "Request confirmed" : r.error, r.ok ? `${b.passenger.name} is on your ride.` : undefined); }}>Confirm</Button>
-                    <Button variant="outline" size="sm" disabled={b.status === "declined"} onClick={() => { const r = respondToBooking(b.id, "declined"); toast(r.ok ? "info" : "error", r.ok ? "Request declined" : r.error, r.ok ? "The seat went back to the board." : undefined); }}>Decline</Button>
+                    <Button size="sm" icon={<CheckCircle2 className="h-4 w-4" aria-hidden />} disabled={b.status === "confirmed"} onClick={async () => { const r = await respondToBooking(b.id, "confirmed"); toast(r.ok ? "success" : "error", r.ok ? "Request confirmed" : r.error, r.ok ? `${b.passenger.name} is on your ride.` : undefined); }}>Confirm</Button>
+                    <Button variant="outline" size="sm" disabled={b.status === "declined"} onClick={async () => { const r = await respondToBooking(b.id, "declined"); toast(r.ok ? "info" : "error", r.ok ? "Request declined" : r.error, r.ok ? "The seat went back to the board." : undefined); }}>Decline</Button>
                   </div>
                 </li>))}</ul>
             )}
@@ -153,7 +153,7 @@ export default function Dashboard() {
       <ConfirmDialog open={Boolean(target)} onClose={() => setTarget(null)} title={target?.kind === "ride" ? "Cancel this ride?" : "Cancel this booking?"}
         description={target?.kind === "ride" ? `Passengers booked on ${target?.label} will lose their seats.` : `Your seat on ${target?.label} goes back to the board.`}
         confirmLabel={target?.kind === "ride" ? "Yes, cancel the ride" : "Yes, cancel my seat"}
-        onConfirm={() => { const r = target.kind === "ride" ? setRideStatus(target.id, "cancelled") : cancelBooking(target.id); toast(r.ok ? "success" : "error", r.ok ? (target.kind === "ride" ? "Ride cancelled" : "Booking cancelled") : r.error); }} />
+        onConfirm={async () => { const r = await (target.kind === "ride" ? setRideStatus(target.id, "cancelled") : cancelBooking(target.id)); toast(r.ok ? "success" : "error", r.ok ? (target.kind === "ride" ? "Ride cancelled" : "Booking cancelled") : r.error); }} />
     </div>
   );
 }
