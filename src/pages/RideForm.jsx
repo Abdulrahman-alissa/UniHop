@@ -29,6 +29,7 @@ export default function RideForm() {
   const [f, setF] = useState(EMPTY);
   const [errors, setErrors] = useState({});
   const [confirm, setConfirm] = useState(false);
+  const [busy, setBusy] = useState(false);
 
   useEffect(() => {
     if (!existing) return;
@@ -76,14 +77,16 @@ export default function RideForm() {
     return e;
   };
 
-  const submit = (ev) => {
+  const submit = async (ev) => {
     ev.preventDefault();
     const e = validate();
     setErrors(e);
     if (Object.keys(e).length) return toast("error", "Check the highlighted fields", "A few details need your attention.");
     const draft = { direction: f.direction, girlsOnly: f.girlsOnly, originArea: f.originArea.trim(), originLabel: f.originLabel.trim(), campus: f.campus, meetingPoint: f.meetingPoint.trim(), departAt: combine(f.departDate, f.departTime),
       returnAt: f.hasReturn ? combine(f.departDate, f.returnTime) : null, seatsTotal: Number(f.seatsTotal), pricePerSeat: Number(f.pricePerSeat), notes: f.notes.trim(), tags: f.tags };
-    const res = isEdit ? updateRide(id, draft) : createRide(draft);
+    setBusy(true);
+    const res = isEdit ? await updateRide(id, draft) : await createRide(draft);
+    setBusy(false);
     if (!res.ok) return toast("error", "Couldn't save", res.error);
     toast("success", isEdit ? "Ride updated" : "Ride posted", isEdit ? "Passengers see the new details." : "Your seats are on the board.");
     nav(`/rides/${isEdit ? id : res.rideId}`);
@@ -146,7 +149,7 @@ export default function RideForm() {
             <TextAreaInput id="notes" label="Anything they should know?" maxLength={400} placeholder="e.g. No stops. I wait five minutes at the pickup point." value={f.notes} onChange={(e) => set("notes", e.target.value)} error={errors.notes} hint={`${f.notes.length}/400`} />
           </Fieldset>
           <div className="mt-8 flex flex-col gap-2 sm:flex-row">
-            <Button type="submit" variant="accent" size="lg" className="sm:flex-1" icon={isEdit ? <Save className="h-5 w-5" aria-hidden /> : <Send className="h-5 w-5" aria-hidden />}>{isEdit ? "Save changes" : "Post ride to the board"}</Button>
+            <Button type="submit" variant="accent" size="lg" className="sm:flex-1" loading={busy} icon={isEdit ? <Save className="h-5 w-5" aria-hidden /> : <Send className="h-5 w-5" aria-hidden />}>{isEdit ? "Save changes" : "Post ride to the board"}</Button>
             <ButtonLink to={isEdit ? `/rides/${id}` : "/dashboard"} variant="outline" size="lg">Discard</ButtonLink>
           </div>
           {isEdit && <div className="mt-6 border-t border-border pt-5"><Button variant="danger" icon={<Trash2 className="h-4 w-4" aria-hidden />} disabled={existing.status === "cancelled"} onClick={() => setConfirm(true)}>{existing.status === "cancelled" ? "Ride already cancelled" : "Cancel this ride"}</Button></div>}
@@ -170,7 +173,7 @@ export default function RideForm() {
       </div>
 
       <ConfirmDialog open={confirm} onClose={() => setConfirm(false)} title="Cancel this ride?" description="Every passenger booked on it loses their seat." confirmLabel="Yes, cancel the ride"
-        onConfirm={() => { const r = setRideStatus(id, "cancelled"); toast(r.ok ? "success" : "error", r.ok ? "Ride cancelled" : r.error); if (r.ok) nav("/dashboard"); }} />
+        onConfirm={async () => { const r = await setRideStatus(id, "cancelled"); toast(r.ok ? "success" : "error", r.ok ? "Ride cancelled" : r.error); if (r.ok) nav("/dashboard"); }} />
     </div>
   );
 }

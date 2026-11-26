@@ -1,14 +1,22 @@
+import { useEffect, useState } from "react";
 import { Link, useParams } from "react-router-dom";
 import { ArrowLeft, CarFront, GraduationCap, Languages, ShieldCheck } from "lucide-react";
 import { useStore } from "../store";
 import { Avatar, Badge, EmptyState, Stars } from "../components/ui";
 import { ButtonLink } from "../components/Button";
 import RideCard from "../components/RideCard";
+import { api } from "../lib/api";
 
 export default function Driver() {
   const { id } = useParams();
-  const { users, ridesByDriver, canSee } = useStore();
-  const driver = users.find((u) => u.id === id);
+  const { ridesByDriver, canSee } = useStore();
+  // undefined = loading, null = not found
+  const [driver, setDriver] = useState();
+  useEffect(() => {
+    setDriver(undefined);
+    api.get(`/users/${id}`).then(setDriver, () => setDriver(null));
+  }, [id]);
+  if (driver === undefined) return <p role="status" className="py-16 text-center text-muted-foreground">Loading profile…</p>;
   if (!driver) return <EmptyState title="Driver not found" description="This profile doesn't exist." action={<ButtonLink to="/rides">Browse rides</ButtonLink>} />;
   const rides = ridesByDriver(driver.id).filter((r) => r.status === "open" && canSee(r));
   const car = driver.car;
