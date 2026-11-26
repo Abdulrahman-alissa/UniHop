@@ -35,12 +35,7 @@ export default function RideCard({ rideId, variant, className }) {
     event.preventDefault();
     event.stopPropagation();
 
-    toggleSaved(ride.id);
-
-    toast(
-      "info",
-      saved ? "Removed from saved rides" : "Saved for later"
-    );
+    toggleSaved(ride.id); // the store shows its own toast once the server answers
   };
 
   return (
