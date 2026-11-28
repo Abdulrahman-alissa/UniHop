@@ -1,4 +1,5 @@
 // Shared SQL for reading rides: every ride comes with its driver and live seat counts.
+import { ApiError } from "../utils.js";
 import { rideFromRow } from "./mappers.js";
 
 export const RIDE_SELECT = `
@@ -20,4 +21,18 @@ export async function getRidesByIds(db, ids) {
   if (!ids.length) return new Map();
   const { rows } = await db.query(`${RIDE_SELECT} WHERE r.id = ANY($1::text[])`, [ids]);
   return new Map(rows.map((r) => [r.id, rideFromRow(r)]));
+}
+
+/** Load a ride or throw 404. */
+export async function findRideOr404(db, id) {
+  const ride = await getRide(db, id);
+  if (!ride) throw new ApiError(404, "Ride not found.", "NOT_FOUND");
+  return ride;
+}
+
+/** Only the driver who posted the ride may change it. */
+export function assertOwner(ride, user) {
+  if (ride.driverId !== user.id) {
+    throw new ApiError(403, "Only the driver can change this ride.", "FORBIDDEN");
+  }
 }

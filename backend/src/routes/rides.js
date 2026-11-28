@@ -1,7 +1,7 @@
 import { Router } from "express";
 import { query, withTransaction } from "../db/pool.js";
 import { bookingFromRow, rideFromRow } from "../db/mappers.js";
-import { RIDE_SELECT, canSeeRide, getRide } from "../db/rides.js";
+import { RIDE_SELECT, assertOwner, canSeeRide, findRideOr404, getRide } from "../db/rides.js";
 import { optionalAuth, requireAuth } from "../middleware/auth.js";
 import { validateBody, validateQuery } from "../middleware/validate.js";
 import { createBookingSchema, rideQuerySchema, rideSchema, rideStatusSchema } from "../schemas.js";
@@ -10,17 +10,7 @@ import { ApiError, newId } from "../utils.js";
 const router = Router();
 const LIVE = "('pending','confirmed')";
 
-/** Load a ride or 404. */
-async function findRideOr404(db, id) {
-  const ride = await getRide(db, id);
-  if (!ride) throw new ApiError(404, "Ride not found.", "NOT_FOUND");
-  return ride;
-}
 
-/** Only the driver who posted the ride may change it. */
-function assertOwner(ride, user) {
-  if (ride.driverId !== user.id) throw new ApiError(403, "Only the driver can change this ride.", "FORBIDDEN");
-}
 
 /**
  * GET /api/rides: every ride the caller may see, with driver + live seat counts.
