@@ -1,12 +1,11 @@
 import { Router } from "express";
 import { query, withTransaction } from "../db/pool.js";
-import { bookingFromRow } from "../db/mappers.js";
-import { passengerView } from "../db/mappers.js";
-import { assertOwner, canSeeRide, findRideOr404, getRidesByIds } from "../db/rides.js";
+import { bookingFromRow, passengerView } from "../db/mappers.js";
+import { getRidesByIds } from "../db/rides.js";
 import { requireAuth } from "../middleware/auth.js";
 import { validateBody } from "../middleware/validate.js";
-import { bookingStatusSchema, createBookingSchema } from "../schemas/auth.js";
-import { ApiError, newId } from "../utils.js";
+import { bookingStatusSchema } from "../schemas.js";
+import { ApiError } from "../utils.js";
 
 const router = Router();
 const isLive = (s) => s === "pending" || s === "confirmed";
@@ -71,77 +70,6 @@ router.patch("/:id/status", requireAuth, validateBody(bookingStatusSchema), asyn
     return (await db.query("UPDATE bookings SET status = $2 WHERE id = $1 RETURNING *", [booking.id, next])).rows[0];
   });
   res.json(bookingFromRow(updated));
-});
-
-// ---------------------------------------------------------------------------
-// Ride-scoped booking endpoints. Mounted on /api/rides (see app.js).
-// ---------------------------------------------------------------------------
-export const rideBookingsRouter = Router();
-const LIVE = "('pending','confirmed')";
-
-/** GET /api/rides/:id/bookings (auth, owner only): everyone who asked for a seat on this ride. */
-rideBookingsRouter.get("/:id/bookings", requireAuth, async (req, res) => {
-  const ride = await findRideOr404({ query }, req.params.id);
-  assertOwner(ride, req.user);
-  const { rows } = await query(
-    `SELECT b.*, p.name AS p_name, p.campus AS p_campus, p.gender AS p_gender, p.rating AS p_rating, p.verified AS p_verified, p.bio AS p_bio, p.car AS p_car, p.joined_at AS p_joined_at, p.phone AS p_phone
-     FROM bookings b JOIN users p ON p.id = b.passenger_id WHERE b.ride_id = $1 ORDER BY b.created_at`,
-    [ride.id]
-  );
-  res.json(rows.map((r) => ({
-    ...bookingFromRow(r),
-    passenger: { id: r.passenger_id, name: r.p_name, campus: r.p_campus, gender: r.p_gender, rating: r.p_rating, verified: r.p_verified, bio: r.p_bio, car: r.p_car, joinedAt: r.p_joined_at, phone: r.p_phone },
-  })));
-});
-
-/**
- * POST /api/rides/:id/bookings (auth): request seats on a ride.
- * Runs in a transaction with the ride row locked, so two people can never take the last seat at once.
- */
-router.post("/:id/bookings", requireAuth, validateBody(createBookingSchema), async (req, res) => {
-  const { seats, note } = req.body;
-  const booking = await withTransaction(async (db) => {
-    await db.query("SELECT 1 FROM rides WHERE id = $1 FOR UPDATE", [req.params.id]);
-    const ride = await findRideOr404(db, req.params.id);
-    if (!canSeeRide(ride, req.user)) throw new ApiError(403, "This ride is for girls only.", "GIRLS_ONLY");
-    if (ride.status !== "open") throw new ApiError(409, "This ride is no longer open.", "RIDE_NOT_OPEN");
-    if (ride.driverId === req.user.id) throw new ApiError(409, "You can't book your own ride.", "OWN_RIDE");
-    if (Date.parse(ride.departAt) < Date.now() - 3_600_000) throw new ApiError(409, "This ride has already left.", "RIDE_PAST");
-    if (seats > ride.seatsLeft) throw new ApiError(409, ride.seatsLeft === 0 ? "This ride is full." : `Only ${ride.seatsLeft} seat(s) left.`, "NOT_ENOUGH_SEATS");
-    const dup = await db.query(`SELECT 1 FROM bookings WHERE ride_id = $1 AND passenger_id = $2 AND status IN ${LIVE}`, [ride.id, req.user.id]);
-    if (dup.rowCount) throw new ApiError(409, "You already booked this ride.", "ALREADY_BOOKED");
-    const { rows } = await db.query(
-      "INSERT INTO bookings (id, ride_id, passenger_id, seats, note) VALUES ($1,$2,$3,$4,$5) RETURNING *",
-      [newId(), ride.id, req.user.id, seats, note]
-    );
-    return rows[0];
-  });
-  res.status(201).json(bookingFromRow(booking));
-});
-
-/**
- * POST /api/rides/:id/bookings (auth): request seats on a ride.
- * Runs in a transaction with the ride row locked, so two people can never take the last seat at once.
- */
-rideBookingsRouter.post("/:id/bookings", requireAuth, validateBody(createBookingSchema), async (req, res) => {
-  const { seats, note } = req.body;
-  const booking = await withTransaction(async (db) => {
-    await db.query("SELECT 1 FROM rides WHERE id = $1 FOR UPDATE", [req.params.id]);
-    const ride = await findRideOr404(db, req.params.id);
-    if (!canSeeRide(ride, req.user)) throw new ApiError(403, "This ride is for girls only.", "GIRLS_ONLY");
-    if (ride.status !== "open") throw new ApiError(409, "This ride is no longer open.", "RIDE_NOT_OPEN");
-    if (ride.driverId === req.user.id) throw new ApiError(409, "You can't book your own ride.", "OWN_RIDE");
-    if (Date.parse(ride.departAt) < Date.now() - 3_600_000) throw new ApiError(409, "This ride has already left.", "RIDE_PAST");
-    if (seats > ride.seatsLeft) throw new ApiError(409, ride.seatsLeft === 0 ? "This ride is full." : `Only ${ride.seatsLeft} seat(s) left.`, "NOT_ENOUGH_SEATS");
-    const dup = await db.query(`SELECT 1 FROM bookings WHERE ride_id = $1 AND passenger_id = $2 AND status IN ${LIVE}`, [ride.id, req.user.id]);
-    if (dup.rowCount) throw new ApiError(409, "You already booked this ride.", "ALREADY_BOOKED");
-    const { rows } = await db.query(
-      "INSERT INTO bookings (id, ride_id, passenger_id, seats, note) VALUES ($1,$2,$3,$4,$5) RETURNING *",
-      [newId(), ride.id, req.user.id, seats, note]
-    );
-    return rows[0];
-  });
-  res.status(201).json(bookingFromRow(booking));
 });
 
 export default router;

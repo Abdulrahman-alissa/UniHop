@@ -32,5 +32,7 @@ export async function findRideOr404(db, id) {
 
 /** Only the driver who posted the ride may change it. */
 export function assertOwner(ride, user) {
-  if (ride.driverId !== user.id) throw new ApiError(403, "Only the driver can change this ride.", "FORBIDDEN");
+  if (ride.driverId !== user.id) {
+    throw new ApiError(403, "Only the driver can change this ride.", "FORBIDDEN");
+  }
 }

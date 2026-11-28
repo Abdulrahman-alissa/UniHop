@@ -3,7 +3,7 @@ import { query } from "../db/pool.js";
 import { privateUser, publicUser } from "../db/mappers.js";
 import { requireAuth } from "../middleware/auth.js";
 import { validateBody } from "../middleware/validate.js";
-import { updateUserSchema } from "../schemas/auth.js";
+import { updateUserSchema } from "../schemas.js";
 import { ApiError } from "../utils.js";
 
 const router = Router();

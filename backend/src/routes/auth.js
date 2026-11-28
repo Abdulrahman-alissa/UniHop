@@ -6,7 +6,7 @@ import { query } from "../db/pool.js";
 import { privateUser } from "../db/mappers.js";
 import { requireAuth, signToken } from "../middleware/auth.js";
 import { validateBody } from "../middleware/validate.js";
-import { loginSchema, registerSchema } from "../schemas/auth.js";
+import { loginSchema, registerSchema } from "../schemas.js";
 import { ApiError, newId } from "../utils.js";
 
 const router = Router();
