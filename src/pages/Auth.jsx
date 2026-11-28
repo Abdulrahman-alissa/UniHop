@@ -31,6 +31,7 @@ export default function Auth({ initialMode }) {
   );
   const [showPassword, setShowPassword] = useState(false);
   const [formError, setFormError] = useState("");
+  const [busy, setBusy] = useState(false);
   const [errors, setErrors] = useState({});
 
   const [form, setForm] = useState({
@@ -80,7 +81,7 @@ export default function Auth({ initialMode }) {
     };
   })();
 
-  const submit = (event) => {
+  const submit = async (event) => {
     event.preventDefault();
 
     const validationErrors = {};
@@ -131,15 +132,17 @@ export default function Auth({ initialMode }) {
       return;
     }
 
+    setBusy(true);
     const result = isRegister
-      ? register({
+      ? await register({
           name: form.name.trim(),
           email: form.email.trim(),
           password: form.password,
           campus: form.campus,
           gender: form.gender,
         })
-      : login(form.email.trim(), form.password);
+      : await login(form.email.trim(), form.password);
+    setBusy(false);
 
     if (!result.ok) {
       setFormError(result.error);
@@ -538,6 +541,7 @@ export default function Auth({ initialMode }) {
                   variant="accent"
                   size="lg"
                   fullWidth
+                  loading={busy}
                 >
                   {isRegister ? "Create account" : "Sign in"}
                 </Button>

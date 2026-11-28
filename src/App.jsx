@@ -10,6 +10,7 @@ import Dashboard from "./pages/Dashboard";
 import Auth from "./pages/Auth";
 import Driver from "./pages/Driver";
 import NotFound from "./pages/NotFound";
+import ApiGate from "./components/ApiGate";
 
 export default function App() {
   return (
@@ -17,6 +18,7 @@ export default function App() {
       <a href="#main" className="sr-only focus:not-sr-only focus:absolute focus:z-50 focus:bg-accent focus:p-3 focus:font-bold focus:text-accent-foreground">Skip to content</a>
       <Navbar />
       <main id="main" className="mx-auto max-w-6xl px-4 pb-10 pt-5 md:pb-12 md:pt-8 lg:px-8">
+        <ApiGate>
         <Routes>
           <Route path="/" element={<Home />} />
           <Route path="/rides" element={<Rides />} />
@@ -30,6 +32,7 @@ export default function App() {
           <Route path="/drivers/:id" element={<Driver />} />
           <Route path="*" element={<NotFound />} />
         </Routes>
+        </ApiGate>
       </main>
       <Footer />
       <Toasts />

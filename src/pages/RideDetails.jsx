@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { Link, useNavigate, useParams } from "react-router-dom";
 import { AlertTriangle, ArrowLeft, Bookmark, CalendarDays, CarFront, CheckCircle2, Clock, Languages, MapPin, MessageSquare, Pencil, Phone, Share2, ShieldCheck, Trash2 } from "lucide-react";
 import { useStore } from "../store";
@@ -11,6 +11,7 @@ import RideCard from "../components/RideCard";
 import CampusPhoto from "../components/CampusPhoto";
 import { CAMPUS_INFO } from "../data";
 import { cn } from "../lib/cn";
+import { api } from "../lib/api";
 
 const Card = ({ className, ...p }) => <section className={cn("rounded-2xl border border-border bg-card p-5 shadow-sm sm:p-6", className)} {...p} />;
 
@@ -25,6 +26,18 @@ export default function RideDetails() {
   const [note, setNote] = useState("");
   const [agree, setAgree] = useState(false);
   const [err, setErr] = useState("");
+  const [busy, setBusy] = useState(false);
+  // When the ride is not in the loaded list, ask the API why (deleted, or girls-only for this account).
+  const [lookup, setLookup] = useState({ id: null, code: null });
+  useEffect(() => {
+    if (ride) return;
+    let live = true;
+    api.get(`/rides/${id}`).then(() => live && setLookup({ id, code: "FOUND" }), (e) => live && setLookup({ id, code: e.code || "ERROR" }));
+    return () => { live = false; };
+  }, [id, ride]);
+
+  if (!ride && lookup.id === id && lookup.code === "GIRLS_ONLY")
+    return <EmptyState title="This ride is for girls only" description="The driver made it available to girls only. Browse the board for other seats." action={<ButtonLink to="/rides">Back to ride list</ButtonLink>} />;
 
   if (!ride)
     return <EmptyState title="That ride is no longer on the board" description="It may have been removed. Browse the board for other seats." action={<ButtonLink to="/rides">Back to ride list</ButtonLink>} />;
@@ -37,7 +50,7 @@ export default function RideDetails() {
   const isDriver = currentUser?.id === ride.driverId;
   const mine = currentUser && bookings.find((b) => b.rideId === ride.id && b.passengerId === currentUser.id && (b.status === "pending" || b.status === "confirmed"));
   const saved = savedRideIds.includes(ride.id);
-  const requests = isDriver ? bookingsForDriver(currentUser.id).filter((b) => b.rideId === ride.id) : [];
+  const requests = isDriver ? bookingsForDriver().filter((b) => b.rideId === ride.id) : [];
   const similar = upcoming.filter((r) => r.id !== ride.id && r.campus === ride.campus && !r.isFull).slice(0, 2);
   const car = ride.driver.car;
   const canBook = ride.status === "open" && !ride.isFull;
@@ -46,10 +59,12 @@ export default function RideDetails() {
     if (!currentUser) { toast("info", "Sign in required", "Use your @lau.edu account to book a seat."); return nav(`/auth?next=${encodeURIComponent(`/rides/${ride.id}`)}`); }
     setErr(""); setAgree(false); setBookOpen(true);
   };
-  const submitBooking = (e) => {
+  const submitBooking = async (e) => {
     e?.preventDefault();
     if (!agree) return setErr("Please confirm you'll be at the pickup point on time.");
-    const r = bookRide(ride.id, Number(seats), note);
+    setBusy(true);
+    const r = await bookRide(ride.id, Number(seats), note);
+    setBusy(false);
     if (!r.ok) return setErr(r.error);
     setBookOpen(false); setNote(""); setSeats("1");
     toast("success", "Request sent", "The driver will confirm your seat.");
@@ -84,7 +99,7 @@ export default function RideDetails() {
             </p>
             {ride.tags.length > 0 && <div className="mt-4 flex flex-wrap gap-2">{ride.tags.map((t) => <Badge key={t}>{t}</Badge>)}</div>}
             <div className="mt-5 flex flex-wrap gap-2 border-t border-border pt-5">
-              <Button variant="outline" size="sm" aria-pressed={saved} icon={<Bookmark className={cn("h-4 w-4", saved && "fill-current")} aria-hidden />} onClick={() => { toggleSaved(ride.id); toast("info", saved ? "Removed from saved rides" : "Saved for later"); }}>{saved ? "Saved" : "Save ride"}</Button>
+              <Button variant="outline" size="sm" aria-pressed={saved} icon={<Bookmark className={cn("h-4 w-4", saved && "fill-current")} aria-hidden />} onClick={() => toggleSaved(ride.id)}>{saved ? "Saved" : "Save ride"}</Button>
               <Button variant="outline" size="sm" icon={<Share2 className="h-4 w-4" aria-hidden />} onClick={() => navigator.clipboard?.writeText(window.location.href).then(() => toast("success", "Link copied"), () => toast("info", "Copy the address bar link to share")) ?? toast("info", "Copy the address bar link to share")}>Share</Button>
               {isDriver && <>
                 <ButtonLink to={`/rides/${ride.id}/edit`} variant="subtle" size="sm" icon={<Pencil className="h-4 w-4" aria-hidden />}>Edit ride</ButtonLink>
@@ -163,7 +178,7 @@ export default function RideDetails() {
                   <ButtonLink to={`/rides/${ride.id}/edit`} fullWidth icon={<Pencil className="h-4 w-4" aria-hidden />}>Edit ride details</ButtonLink></>
               ) : mine ? (
                 <><div className="rounded-xl border border-success/40 bg-success/10 p-3"><p className="flex items-center gap-2 font-bold"><CheckCircle2 className="h-4 w-4 text-success" aria-hidden />You're on this ride</p><p className="text-sm text-muted-foreground">{mine.seats} seat{mine.seats > 1 && "s"} · {mine.status === "pending" ? "Awaiting driver confirmation" : "Confirmed by the driver"}</p></div>
-                  <Button variant="outline" fullWidth onClick={() => { const r = cancelBooking(mine.id); toast(r.ok ? "success" : "error", r.ok ? "Booking cancelled" : r.error); }}>Cancel my booking</Button></>
+                  <Button variant="outline" fullWidth onClick={async () => { const r = await cancelBooking(mine.id); toast(r.ok ? "success" : "error", r.ok ? "Booking cancelled" : r.error); }}>Cancel my booking</Button></>
               ) : bookButton}
               {!currentUser && <p className="text-center text-sm text-muted-foreground"><Link to="/auth" className="font-bold text-accent-strong underline">Sign in</Link> to book or post rides.</p>}
             </div>
@@ -180,7 +195,7 @@ export default function RideDetails() {
       )}
 
       <Modal open={bookOpen} onClose={() => setBookOpen(false)} title="Confirm your seat" description={`${route.from} to ${route.to} · ${formatFullDate(ride.departAt)} at ${formatTime(ride.departAt)}`}
-        footer={<div className="grid grid-cols-2 gap-2"><Button variant="outline" onClick={() => setBookOpen(false)}>Cancel</Button><Button variant="accent" onClick={submitBooking}>Send request</Button></div>}>
+        footer={<div className="grid grid-cols-2 gap-2"><Button variant="outline" onClick={() => setBookOpen(false)}>Cancel</Button><Button variant="accent" loading={busy} onClick={submitBooking}>Send request</Button></div>}>
         <form className="space-y-4" onSubmit={submitBooking}>
           <SelectInput id="b-seats" label="Number of seats" value={seats} onChange={(e) => setSeats(e.target.value)}
             options={Array.from({ length: Math.max(1, ride.seatsLeft) }, (_, i) => ({ value: String(i + 1), label: `${i + 1} seat${i ? "s" : ""} · ${formatPrice(ride.pricePerSeat * (i + 1))} total` }))} hint="Fares are paid directly to the driver." />
@@ -191,7 +206,7 @@ export default function RideDetails() {
       </Modal>
 
       <ConfirmDialog open={cancelOpen} onClose={() => setCancelOpen(false)} title="Cancel this ride?" description="Every passenger booked on it will lose their seat. This can't be undone." confirmLabel="Yes, cancel the ride"
-        onConfirm={() => { const r = setRideStatus(ride.id, "cancelled"); toast(r.ok ? "success" : "error", r.ok ? "Ride cancelled" : r.error); }} />
+        onConfirm={async () => { const r = await setRideStatus(ride.id, "cancelled"); toast(r.ok ? "success" : "error", r.ok ? "Ride cancelled" : r.error); }} />
     </div>
   );
 }
